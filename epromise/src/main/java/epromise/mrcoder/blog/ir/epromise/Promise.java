@@ -15,16 +15,15 @@ public class Promise<T> {
     private final ConcurrentLinkedQueue<Promise> waitingPromises = new ConcurrentLinkedQueue<>();
     private final Runner runner;
 
-    Promise(final PromiseCallback<T> callback, boolean runImmediately, Runner runner){
+    private final Object fulfilLock = new Object();
+
+    private Promise(final PromiseCallback<T> callback, boolean runImmediately) {
         this.callback = callback;
-        this.runner = runner;
+        this.runner = new AsyncRunner();
 
         if (runImmediately)
             run();
-    }
 
-    private Promise(final PromiseCallback<T> callback, boolean runImmediately) {
-        this(callback, runImmediately, new AsyncRunner());
     }
 
     public Promise(final PromiseCallback<T> callback) {
@@ -50,16 +49,21 @@ public class Promise<T> {
             }
         }, false);
 
-        waitingPromises.add(p);
+        synchronized (fulfilLock) {
+            if (promiseHandle.fulfilled)
+                p.run();
+            else
+                waitingPromises.add(p);
+        }
+
         return p;
     }
 
-    private class PromiseHandleImp implements PromiseHandle<T>{
+    private class PromiseHandleImp implements PromiseHandle<T> {
 
-        private final Object fulfilLock = new Object();
-        T value;
-        Throwable rejectValue;
-        boolean fulfilled = false;
+        private T value;
+        private Throwable rejectValue;
+        private boolean fulfilled = false;
 
         @Override
         public void resolve(T value) {
@@ -71,7 +75,7 @@ public class Promise<T> {
             }
 
             this.value = value;
-            while (!waitingPromises.isEmpty()){
+            while (!waitingPromises.isEmpty()) {
                 Promise p = waitingPromises.peek();
                 p.run();
             }
