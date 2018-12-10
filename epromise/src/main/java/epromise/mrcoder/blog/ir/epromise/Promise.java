@@ -94,13 +94,9 @@ public class Promise<T> {
             }
 
             this.value = value;
-            int c = 0;
             while (!thenPromises.isEmpty()) {
                 Promise p = thenPromises.remove();
                 p.run();
-                c++;
-                if (c > 10)
-                    throw new RuntimeException("Kooft2");
             }
         }
 
