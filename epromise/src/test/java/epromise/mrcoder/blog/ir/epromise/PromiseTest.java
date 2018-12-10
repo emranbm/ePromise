@@ -4,10 +4,10 @@ package epromise.mrcoder.blog.ir.epromise;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.runners.MockitoJUnitRunner;
 import org.robolectric.RobolectricTestRunner;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 
@@ -28,21 +28,17 @@ public class PromiseTest {
             }
         });
 
-        try {
-            boolean lockReleased = lock.await(500, TimeUnit.MILLISECONDS);
-            if (!lockReleased)
-                Assert.fail("Promise body didn't called.");
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        await(lock, "Promise body didn't called.");
     }
 
     @Test
-    public void thenRuns() {
+    public void thenRunsBeforeFulfilment() {
         final CountDownLatch lock = new CountDownLatch(1);
-        Promise<String> p = new Promise<>(new PromiseCallback<String>() {
+        final CountDownLatch lock2 = new CountDownLatch(1);
+        final Promise<String> p = new Promise<>(new PromiseCallback<String>() {
             @Override
             public void handle(PromiseHandle<String> handle) {
+                await(lock);
                 handle.resolve("hello");
             }
         });
@@ -50,17 +46,13 @@ public class PromiseTest {
         p.then(new ThenCallback<String, String>() {
             @Override
             public void handle(String value, PromiseHandle<String> handle) {
-                lock.countDown();
+                lock2.countDown();
             }
         });
 
-        try {
-            boolean lockReleased = lock.await(500, TimeUnit.MILLISECONDS);
-            if (!lockReleased)
-                Assert.fail("Promise body didn't called.");
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        lock.countDown();
+
+        await(lock2, "Pre-fulfilment `then` didn't get called.");
     }
 
     @Test
@@ -75,20 +67,33 @@ public class PromiseTest {
             }
         });
 
-        try {
-            lock.await();
-            p.then(new ThenCallback<String, String>() {
-                @Override
-                public void handle(String value, PromiseHandle<String> handle) {
-                    lock2.countDown();
-                }
-            });
+        await(lock);
 
-            boolean lock2Released = lock.await(500, TimeUnit.MILLISECONDS);
-            if (!lock2Released)
-                Assert.fail("Post-fulfilment `then` didn't get called.");
+        p.then(new ThenCallback<String, String>() {
+            @Override
+            public void handle(String value, PromiseHandle<String> handle) {
+                lock2.countDown();
+            }
+        });
+
+        await(lock2, "Post-fulfilment `then` didn't get called.");
+    }
+
+    private static void await(CountDownLatch lock, String timeoutMsg) {
+        try {
+            boolean lockReleased = lock.await(500, TimeUnit.MILLISECONDS);
+            if (!lockReleased) {
+                if (timeoutMsg != null)
+                    Assert.fail(timeoutMsg);
+                else
+                    throw new RuntimeException("Lock timeout");
+            }
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+    }
+
+    private static void await(CountDownLatch lock) {
+        await(lock, null);
     }
 }
