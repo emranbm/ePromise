@@ -9,12 +9,12 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public class Promise<T> {
 
     private final PromiseCallback<T> callback;
-    private final PromiseHandleImp promiseHandle = new PromiseHandleImp();
+    private final PromiseHandleImp<T> promiseHandle = new PromiseHandleImp<>(this);
+    private final Runner runner;
     private final ConcurrentLinkedQueue<Promise> thenPromises = new ConcurrentLinkedQueue<>();
     private final ConcurrentLinkedQueue<Promise> catchPromises = new ConcurrentLinkedQueue<>();
-    private final Runner runner;
 
-    private final Object fulfilLock = new Object();
+    final Object fulfilLock = new Object();
 
     private Promise(final PromiseCallback<T> callback, boolean runImmediately) {
         this.callback = callback;
@@ -29,13 +29,25 @@ public class Promise<T> {
         this(callback, true);
     }
 
-    private void run() {
+    void run() {
         runner.run(new Runnable() {
             @Override
             public void run() {
                 callback.handle(promiseHandle);
             }
         });
+    }
+
+    PromiseHandleImp<T> getPromiseHandle(){
+        return promiseHandle;
+    }
+
+    ConcurrentLinkedQueue<Promise> getThenPromises(){
+        return thenPromises;
+    }
+
+    ConcurrentLinkedQueue<Promise> getCatchPromises(){
+        return catchPromises;
     }
 
     public <V> Promise<V> then(final ThenCallback<T, V> callback) {
@@ -84,11 +96,11 @@ public class Promise<T> {
         return p;
     }
 
-    private boolean isRejected() {
+    boolean isRejected() {
         return promiseHandle.rejectValue != null;
     }
 
-    private boolean isResolved() {
+    boolean isResolved() {
         return promiseHandle.value != null;
     }
 
@@ -102,56 +114,5 @@ public class Promise<T> {
         Promise<V> p = new Promise<>(null,false);
         p.promiseHandle.reject(e);
         return p;
-    }
-
-    private class PromiseHandleImp implements PromiseHandle<T> {
-
-        private T value;
-        private Throwable rejectValue;
-        private boolean fulfilled = false;
-
-        @Override
-        public void resolve(T value) {
-            synchronized (fulfilLock) {
-                if (fulfilled)
-                    throw new PromiseStateException(PromiseStateException.MSG_PROMISE_ALREADY_FULFILLED);
-
-                fulfilled = true;
-            }
-
-            this.value = value;
-            while (!thenPromises.isEmpty()) {
-                Promise p = thenPromises.remove();
-                p.run();
-            }
-        }
-
-        @Override
-        public void reject(Throwable e) {
-            synchronized (fulfilLock) {
-                if (fulfilled)
-                    throw new PromiseStateException(PromiseStateException.MSG_PROMISE_ALREADY_FULFILLED);
-
-                fulfilled = true;
-            }
-
-            this.rejectValue = e;
-
-            runCatchPromises(Promise.this);
-            while (!thenPromises.isEmpty()) {
-                Promise p = thenPromises.remove();
-                p.promiseHandle.reject(this.rejectValue);
-            }
-        }
-
-        private void runCatchPromises(Promise rejectedPromise) {
-            while (!rejectedPromise.catchPromises.isEmpty()) {
-                Promise catchPromise = (Promise) rejectedPromise.catchPromises.remove();
-                catchPromise.run();
-
-                while (!rejectedPromise.thenPromises.isEmpty())
-                    runCatchPromises((Promise) rejectedPromise.thenPromises.remove());
-            }
-        }
     }
 }
