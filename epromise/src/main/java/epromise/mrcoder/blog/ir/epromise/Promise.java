@@ -1,6 +1,5 @@
 package epromise.mrcoder.blog.ir.epromise;
 
-import java.util.Enumeration;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
