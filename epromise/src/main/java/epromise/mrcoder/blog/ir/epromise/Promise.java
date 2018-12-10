@@ -1,5 +1,6 @@
 package epromise.mrcoder.blog.ir.epromise;
 
+import java.util.Enumeration;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
@@ -49,32 +50,58 @@ public class Promise<T> {
         }, false);
 
         synchronized (fulfilLock) {
-            if (promiseHandle.fulfilled)
-                p.run();
-            else
+            if (promiseHandle.fulfilled) {
+                if (isResolved())
+                    p.run();
+                else if (isRejected())
+                    p = Promise.reject(promiseHandle.rejectValue);
+                else
+                    throw new PromiseStateException("Fulfilled promise is neither resolved nor rejected!");
+            } else
                 thenPromises.add(p);
         }
 
         return p;
     }
 
-    public <V> Promise<V> catchReject(final ThenCallback<T, V> callback) {
+    public <V> Promise<V> catchReject(final ThenCallback<Throwable, V> callback) {
 
         Promise<V> p = new Promise<>(new PromiseCallback<V>() {
             @Override
             public void handle(PromiseHandle<V> handle) {
                 // This promise runs when rejected.
-                callback.handle(promiseHandle.value, handle);
+                callback.handle(promiseHandle.rejectValue, handle);
             }
         }, false);
 
         synchronized (fulfilLock) {
-            if (promiseHandle.fulfilled)
-                p.run();
-            else
+            if (promiseHandle.fulfilled) {
+                if (isRejected())
+                    p.run();
+            } else
                 catchPromises.add(p);
         }
 
+        return p;
+    }
+
+    private boolean isRejected() {
+        return promiseHandle.rejectValue != null;
+    }
+
+    private boolean isResolved() {
+        return promiseHandle.value != null;
+    }
+
+    public static <V> Promise<V> resolve(V value){
+        Promise<V> p = new Promise<>(null,false);
+        p.promiseHandle.resolve(value);
+        return p;
+    }
+
+    public static <V> Promise<V> reject(Throwable e){
+        Promise<V> p = new Promise<>(null,false);
+        p.promiseHandle.reject(e);
         return p;
     }
 
@@ -110,9 +137,21 @@ public class Promise<T> {
             }
 
             this.rejectValue = e;
+
+            runCatchPromises(Promise.this);
             while (!thenPromises.isEmpty()) {
                 Promise p = thenPromises.remove();
                 p.promiseHandle.reject(this.rejectValue);
+            }
+        }
+
+        private void runCatchPromises(Promise rejectedPromise) {
+            while (!rejectedPromise.catchPromises.isEmpty()) {
+                Promise catchPromise = (Promise) rejectedPromise.catchPromises.remove();
+                catchPromise.run();
+
+                while (!rejectedPromise.thenPromises.isEmpty())
+                    runCatchPromises((Promise) rejectedPromise.thenPromises.remove());
             }
         }
     }

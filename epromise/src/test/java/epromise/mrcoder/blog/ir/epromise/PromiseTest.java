@@ -79,6 +79,56 @@ public class PromiseTest {
         await(lock2, "Post-fulfilment `then` didn't get called.");
     }
 
+    @Test
+    public void catchRuns() {
+        final CountDownLatch lock = new CountDownLatch(1);
+        Promise p = new Promise(new PromiseCallback() {
+            @Override
+            public void handle(PromiseHandle handle) {
+                handle.reject(new Exception());
+            }
+        });
+
+        p.catchReject(new ThenCallback<Throwable, Void>() {
+            @Override
+            public void handle(Throwable value, PromiseHandle<Void> handle) {
+                lock.countDown();
+            }
+        });
+
+        await(lock, "Catch not called.");
+    }
+
+    @Test
+    public void rejectionPropagates() {
+        final CountDownLatch lock = new CountDownLatch(1);
+        Promise p = new Promise(new PromiseCallback() {
+            @Override
+            public void handle(PromiseHandle handle) {
+                handle.reject(new Exception());
+            }
+        });
+
+        p.then(new ThenCallback() {
+            @Override
+            public void handle(Object value, PromiseHandle handle) {
+                handle.resolve(null);
+            }
+        }).then(new ThenCallback() {
+            @Override
+            public void handle(Object value, PromiseHandle handle) {
+                handle.resolve(null);
+            }
+        }).catchReject(new ThenCallback<Throwable, Void>() {
+            @Override
+            public void handle(Throwable value, PromiseHandle<Void> handle) {
+                lock.countDown();
+            }
+        });
+
+        await(lock, "Rejection not propagated through continuous thens.");
+    }
+
     private static void await(CountDownLatch lock, String timeoutMsg) {
         try {
             boolean lockReleased = lock.await(500, TimeUnit.MILLISECONDS);
