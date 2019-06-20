@@ -8,5 +8,5 @@ public interface PromiseHandle<T> {
 
     void resolve(T value);
 
-    void reject(Throwable e);
+    void reject(Object e);
 }

@@ -38,15 +38,15 @@ public class Promise<T> {
         });
     }
 
-    PromiseHandleImp<T> getPromiseHandle(){
+    PromiseHandleImp<T> getPromiseHandle() {
         return promiseHandle;
     }
 
-    ConcurrentLinkedQueue<Promise> getThenPromises(){
+    ConcurrentLinkedQueue<Promise> getThenPromises() {
         return thenPromises;
     }
 
-    ConcurrentLinkedQueue<Promise> getCatchPromises(){
+    ConcurrentLinkedQueue<Promise> getCatchPromises() {
         return catchPromises;
     }
 
@@ -75,13 +75,19 @@ public class Promise<T> {
         return p;
     }
 
-    public <V> Promise<V> catchReject(final ThenCallback<Throwable, V> callback) {
+    public <U, V> Promise<V> catchReject(final ThenCallback<U, V> callback) {
 
         Promise<V> p = new Promise<>(new PromiseCallback<V>() {
             @Override
             public void handle(PromiseHandle<V> handle) {
                 // This promise runs when rejected.
-                callback.handle(promiseHandle.rejectValue, handle);
+                U asU = (U) promiseHandle.rejectValue;
+
+                try {
+                    callback.handle(asU, handle);
+                } catch (ClassCastException e) {
+                    throw new PromiseValueException("The provided reject handler has an incompatible type for the value argument.", e);
+                }
             }
         }, false);
 
@@ -104,14 +110,14 @@ public class Promise<T> {
         return promiseHandle.value != null;
     }
 
-    public static <V> Promise<V> resolve(V value){
-        Promise<V> p = new Promise<>(null,false);
+    public static <V> Promise<V> resolve(V value) {
+        Promise<V> p = new Promise<>(null, false);
         p.promiseHandle.resolve(value);
         return p;
     }
 
-    public static <V> Promise<V> reject(Throwable e){
-        Promise<V> p = new Promise<>(null,false);
+    public static <V> Promise<V> reject(Object e) {
+        Promise<V> p = new Promise<>(null, false);
         p.promiseHandle.reject(e);
         return p;
     }

@@ -7,7 +7,7 @@ class PromiseHandleImp<T> implements PromiseHandle<T> {
 
     private final Promise<T> promise;
     T value;
-    Throwable rejectValue;
+    Object rejectValue;
     boolean fulfilled = false;
 
     PromiseHandleImp(Promise<T> promise){
@@ -32,7 +32,7 @@ class PromiseHandleImp<T> implements PromiseHandle<T> {
     }
 
     @Override
-    public void reject(Throwable e) {
+    public void reject(Object e) {
         synchronized (promise.fulfilLock) {
             if (fulfilled)
                 throw new PromiseStateException(PromiseStateException.MSG_PROMISE_ALREADY_FULFILLED);
