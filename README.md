@@ -31,7 +31,7 @@ allprojects {
 Then add the dependency
 ```gradle
 dependencies {
-        implementation 'com.github.emranbm:ePromise:Tag'
+        implementation 'com.github.emranbm:ePromise:v1.0-1'
 }
 ```
-That's it.
+That's it!
