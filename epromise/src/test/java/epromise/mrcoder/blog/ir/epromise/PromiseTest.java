@@ -4,6 +4,7 @@ package epromise.mrcoder.blog.ir.epromise;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 
 import java.util.concurrent.CountDownLatch;
@@ -50,6 +51,7 @@ public class PromiseTest {
         });
 
         lock.countDown();
+        Robolectric.flushForegroundThreadScheduler();
 
         await(lock2, "Pre-fulfilment `then` didn't get called.");
     }
@@ -76,6 +78,7 @@ public class PromiseTest {
         });
 
         await(lock2, "Post-fulfilment `then` didn't get called.");
+
     }
 
     @Test

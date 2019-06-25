@@ -1,5 +1,9 @@
 package epromise.mrcoder.blog.ir.epromise;
 
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
+
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
@@ -16,13 +20,16 @@ public class Promise<T> {
 
     final Object fulfilLock = new Object();
 
-    private Promise(final PromiseCallback<T> callback, boolean runImmediately) {
+    private Promise(final PromiseCallback<T> callback, boolean runImmediately, Runner runner) {
         this.callback = callback;
-        this.runner = new AsyncRunner();
+        this.runner = runner;
 
         if (runImmediately)
             run();
+    }
 
+    private Promise(final PromiseCallback<T> callback, boolean runImmediately) {
+        this(callback, runImmediately, new AsyncRunner());
     }
 
     public Promise(final PromiseCallback<T> callback) {
@@ -30,12 +37,7 @@ public class Promise<T> {
     }
 
     void run() {
-        runner.run(new Runnable() {
-            @Override
-            public void run() {
-                callback.handle(promiseHandle);
-            }
-        });
+        runner.run(() -> callback.handle(promiseHandle));
     }
 
     PromiseHandleImp<T> getPromiseHandle() {
@@ -52,13 +54,10 @@ public class Promise<T> {
 
     public <V> Promise<V> then(final ThenCallback<T, V> callback) {
 
-        Promise<V> p = new Promise<>(new PromiseCallback<V>() {
-            @Override
-            public void handle(PromiseHandle<V> handle) {
-                // This promise runs when the value is resolved and ready.
-                callback.handle(promiseHandle.value, handle);
-            }
-        }, false);
+        Promise<V> p = new Promise<>(handle -> {
+            // This promise runs when the value is resolved and ready.
+            callback.handle(promiseHandle.value, handle);
+        }, false, new UIRunner());
 
         synchronized (fulfilLock) {
             if (promiseHandle.fulfilled) {
@@ -77,19 +76,16 @@ public class Promise<T> {
 
     public <U, V> Promise<V> catchReject(final ThenCallback<U, V> callback) {
 
-        Promise<V> p = new Promise<>(new PromiseCallback<V>() {
-            @Override
-            public void handle(PromiseHandle<V> handle) {
-                // This promise runs when rejected.
-                U asU = (U) promiseHandle.rejectValue;
+        Promise<V> p = new Promise<>(handle -> {
+            // This promise runs when rejected.
+            U asU = (U) promiseHandle.rejectValue;
 
-                try {
-                    callback.handle(asU, handle);
-                } catch (ClassCastException e) {
-                    throw new PromiseValueException("The provided reject handler has an incompatible type for the value argument.", e);
-                }
+            try {
+                callback.handle(asU, handle);
+            } catch (ClassCastException e) {
+                throw new PromiseValueException("The provided reject handler has an incompatible type for the value argument.", e);
             }
-        }, false);
+        }, false, new UIRunner());
 
         synchronized (fulfilLock) {
             if (promiseHandle.fulfilled) {
