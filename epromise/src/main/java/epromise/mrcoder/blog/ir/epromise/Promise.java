@@ -1,9 +1,5 @@
 package epromise.mrcoder.blog.ir.epromise;
 
-import android.os.Handler;
-import android.os.Looper;
-import android.os.Message;
-
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**

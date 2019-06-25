@@ -21,12 +21,7 @@ public class PromiseTest {
     @Test
     public void promiseRuns() {
         final CountDownLatch lock = new CountDownLatch(1);
-        Promise<String> p = new Promise<>(new PromiseCallback<String>() {
-            @Override
-            public void handle(PromiseHandle<String> handle) {
-                lock.countDown();
-            }
-        });
+        Promise<String> p = new Promise<>(handle -> lock.countDown());
 
         await(lock, "Promise body didn't called.");
     }
@@ -35,20 +30,12 @@ public class PromiseTest {
     public void thenRunsBeforeFulfilment() {
         final CountDownLatch lock = new CountDownLatch(1);
         final CountDownLatch lock2 = new CountDownLatch(1);
-        final Promise<String> p = new Promise<>(new PromiseCallback<String>() {
-            @Override
-            public void handle(PromiseHandle<String> handle) {
-                await(lock);
-                handle.resolve("hello");
-            }
+        final Promise<String> p = new Promise<>(handle -> {
+            await(lock);
+            handle.resolve("hello");
         });
 
-        p.then(new ThenCallback<String, String>() {
-            @Override
-            public void handle(String value, PromiseHandle<String> handle) {
-                lock2.countDown();
-            }
-        });
+        p.then((ThenCallback<String, String>) (value, handle) -> lock2.countDown());
 
         lock.countDown();
         Robolectric.flushForegroundThreadScheduler();
@@ -60,22 +47,14 @@ public class PromiseTest {
     public void thenRunsAfterFulfilment() {
         final CountDownLatch lock = new CountDownLatch(1);
         final CountDownLatch lock2 = new CountDownLatch(1);
-        Promise<String> p = new Promise<>(new PromiseCallback<String>() {
-            @Override
-            public void handle(PromiseHandle<String> handle) {
-                handle.resolve("value1");
-                lock.countDown();
-            }
+        Promise<String> p = new Promise<>(handle -> {
+            handle.resolve("value1");
+            lock.countDown();
         });
 
         await(lock);
 
-        p.then(new ThenCallback<String, String>() {
-            @Override
-            public void handle(String value, PromiseHandle<String> handle) {
-                lock2.countDown();
-            }
-        });
+        p.then((ThenCallback<String, String>) (value, handle) -> lock2.countDown());
 
         await(lock2, "Post-fulfilment `then` didn't get called.");
 
@@ -84,19 +63,9 @@ public class PromiseTest {
     @Test
     public void catchRuns() {
         final CountDownLatch lock = new CountDownLatch(1);
-        Promise p = new Promise(new PromiseCallback() {
-            @Override
-            public void handle(PromiseHandle handle) {
-                handle.reject(new Exception());
-            }
-        });
+        Promise<Exception> p = new Promise<>(handle -> handle.reject(new Exception()));
 
-        p.catchReject(new ThenCallback<Throwable, Void>() {
-            @Override
-            public void handle(Throwable value, PromiseHandle<Void> handle) {
-                lock.countDown();
-            }
-        });
+        p.catchReject((ThenCallback<Throwable, Void>) (value, handle) -> lock.countDown());
 
         await(lock, "Catch not called.");
     }
@@ -104,29 +73,11 @@ public class PromiseTest {
     @Test
     public void rejectionPropagates() {
         final CountDownLatch lock = new CountDownLatch(1);
-        Promise p = new Promise(new PromiseCallback() {
-            @Override
-            public void handle(PromiseHandle handle) {
-                handle.reject(new Exception());
-            }
-        });
+        Promise<Object> p = new Promise<>(handle -> handle.reject(new Exception()));
 
-        p.then(new ThenCallback() {
-            @Override
-            public void handle(Object value, PromiseHandle handle) {
-                handle.resolve(null);
-            }
-        }).then(new ThenCallback() {
-            @Override
-            public void handle(Object value, PromiseHandle handle) {
-                handle.resolve(null);
-            }
-        }).catchReject(new ThenCallback<Throwable, Void>() {
-            @Override
-            public void handle(Throwable value, PromiseHandle<Void> handle) {
-                lock.countDown();
-            }
-        });
+        p.then((value, handle) -> handle.resolve(null))
+                .then((value, handle) -> handle.resolve(null))
+                .catchReject((ThenCallback<Throwable, Void>) (value, handle) -> lock.countDown());
 
         await(lock, "Rejection not propagated through continuous thens.");
     }
