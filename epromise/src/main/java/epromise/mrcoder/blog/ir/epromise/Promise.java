@@ -49,11 +49,34 @@ public class Promise<T> {
     }
 
     public <V> Promise<V> then(final ThenCallback<T, V> callback) {
+        return thenInternal(callback, new UIRunner());
+    }
 
+    public <V> Promise<V> thenAsync(final ThenCallback<T, V> callback) {
+        return thenInternal(callback, new AsyncRunner());
+    }
+
+    public <U, V> Promise<V> catchReject(final ThenCallback<U, V> callback) {
+        return catchRejectInternal(callback, new UIRunner());
+    }
+
+    public <U, V> Promise<V> catchRejectAsync(final ThenCallback<U, V> callback) {
+        return catchRejectInternal(callback, new AsyncRunner());
+    }
+
+    boolean isRejected() {
+        return promiseHandle.rejectValue != null;
+    }
+
+    boolean isResolved() {
+        return promiseHandle.value != null;
+    }
+
+    private <V> Promise<V> thenInternal(final ThenCallback<T, V> callback, Runner runner) {
         Promise<V> p = new Promise<>(handle -> {
             // This promise runs when the value is resolved and ready.
             callback.handle(promiseHandle.value, handle);
-        }, false, new UIRunner());
+        }, false, runner);
 
         synchronized (fulfilLock) {
             if (promiseHandle.fulfilled) {
@@ -70,7 +93,7 @@ public class Promise<T> {
         return p;
     }
 
-    public <U, V> Promise<V> catchReject(final ThenCallback<U, V> callback) {
+    private <U, V> Promise<V> catchRejectInternal(final ThenCallback<U, V> callback, Runner runner) {
 
         Promise<V> p = new Promise<>(handle -> {
             // This promise runs when rejected.
@@ -81,7 +104,7 @@ public class Promise<T> {
             } catch (ClassCastException e) {
                 throw new PromiseValueException("The provided reject handler has an incompatible type for the value argument.", e);
             }
-        }, false, new UIRunner());
+        }, false, runner);
 
         synchronized (fulfilLock) {
             if (promiseHandle.fulfilled) {
@@ -92,14 +115,6 @@ public class Promise<T> {
         }
 
         return p;
-    }
-
-    boolean isRejected() {
-        return promiseHandle.rejectValue != null;
-    }
-
-    boolean isResolved() {
-        return promiseHandle.value != null;
     }
 
     public static <V> Promise<V> resolve(V value) {
