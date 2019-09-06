@@ -6,6 +6,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -16,6 +17,7 @@ import java.util.concurrent.TimeUnit;
  */
 
 @RunWith(RobolectricTestRunner.class)
+@Config(shadows = {UIRunnerShadow.class})
 public class PromiseTest {
 
     @Test
@@ -81,6 +83,38 @@ public class PromiseTest {
 
         await(lock, "Rejection not propagated through continuous thens.");
     }
+
+    @Test
+    public void allRuns() {
+        CountDownLatch lock = new CountDownLatch(1);
+        Promise.all(
+                new Promise<String>(handle -> {
+                    handle.resolve("a");
+                }),
+                new Promise<String>(handle -> {
+                    handle.resolve("b");
+                }))
+                .then((values, handle) -> {
+                    Assert.assertEquals("ab", (String) values.get(0) + values.get(1));
+                    lock.countDown();
+                });
+
+        await(lock);
+    }
+
+//    @Test
+//    public void allRejectionWorks(){
+//
+//        CountDownLatch lock = new CountDownLatch(1);
+//        Promise.all(
+//                new Promise<String>(handle -> handle.resolve("a")),
+//                new Promise<String>(handle -> handle.reject("e")))
+//                .catchReject((value, handle) -> {
+//                    lock.countDown();
+//                });
+//
+//        await(lock, "Catch not called on 'all' promise.");
+//    }
 
     private static void await(CountDownLatch lock, String timeoutMsg) {
         try {

@@ -1,6 +1,9 @@
 package epromise.mrcoder.blog.ir.epromise;
 
+import java.util.ArrayList;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Created by emran on 12/1/18.
@@ -33,7 +36,8 @@ public class Promise<T> {
     }
 
     void run() {
-        runner.run(() -> callback.handle(promiseHandle));
+        runner.run(() ->
+                callback.handle(promiseHandle));
     }
 
     PromiseHandleImp<T> getPromiseHandle() {
@@ -127,5 +131,42 @@ public class Promise<T> {
         Promise<V> p = new Promise<>(null, false);
         p.promiseHandle.reject(e);
         return p;
+    }
+
+    public static Promise<ArrayList<Object>> all(Promise... promises) {
+        if (promises == null)
+            throw new NullPointerException("Promises array is null.");
+
+        return new Promise<>(handle -> {
+            CountDownLatch countDownLatch = new CountDownLatch(promises.length);
+
+            final ArrayList<Object> results = new ArrayList<>(promises.length);
+            for (Promise p : promises)
+                p.thenAsync((value, handle1) -> {
+                    results.add(value);
+                    countDownLatch.countDown();
+                });
+
+            try {
+                countDownLatch.await();
+                handle.resolve(results);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                handle.reject(e);
+            }
+        });
+    }
+
+    public static Promise<Object> any(Promise... promises) {
+        final AtomicBoolean anySucceeded = new AtomicBoolean(false);
+
+        return new Promise<>(handle -> {
+            for (Promise p : promises)
+                p.then((value, h) -> {
+                    boolean anySucceededBefore = anySucceeded.getAndSet(true);
+                    if (!anySucceededBefore)
+                        handle.resolve(value);
+                });
+        });
     }
 }
